@@ -11,7 +11,7 @@ import {
 import { stripe } from '../stripe';
 import { Order } from '../models/order';
 import { Payment } from '../models/payment';
-import { PaymentCreatedPublisher } from '../events/payments/payment-create-publisher';
+import { PaymentCreatedPublisher } from '../events/publishers/payment-create-publisher';
 import { natsWrapper } from '../nats-wrapper';
 
 const router = express.Router();
@@ -30,7 +30,7 @@ router.post(
       throw new NotFoundError();
     }
     if (order.userId !== req.currentUser!.id) {
-      throw new NotAuthorizedError(); 
+      throw new NotAuthorizedError();
     }
     if (order.status === OrderStatus.Cancelled) {
       throw new BadRequestError('Cannot pay for an cancelled order');
@@ -42,16 +42,15 @@ router.post(
       source: token,
     });
     const payment = Payment.build({
-        orderId,
-        stripeId: charge.id
-    })
+      orderId,
+      stripeId: charge.id,
+    });
     await payment.save();
-
     new PaymentCreatedPublisher(natsWrapper.client).publish({
-        id: payment.id,
-        orderId: payment.orderId,
-        stripeId: payment.stripeId
-    })
+      id: payment.id,
+      orderId: payment.orderId,
+      stripeId: payment.stripeId,
+    });
 
     res.status(201).send({ id: payment.id });
   }
